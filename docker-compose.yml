@@ -1,0 +1,11 @@
+services:
+  telegram-radar-bot:
+    build: .
+    container_name: telegram_radar_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/radar_bot.db
