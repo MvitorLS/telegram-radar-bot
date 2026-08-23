@@ -4,3 +4,4 @@ beautifulsoup4==4.15.0
 aiosqlite==0.22.1
 apscheduler==3.11.3
 pydantic==2.13.4
+python-dotenv>=1.0.1

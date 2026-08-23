@@ -1,6 +1,12 @@
 import os
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict
+from dotenv import load_dotenv
+
+# Carrega arquivo .env automaticamente se existir
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 @dataclass
 class UserProfile:
