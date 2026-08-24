@@ -1,6 +1,8 @@
 import asyncio
 import os
 import sys
+import re
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -212,7 +214,14 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("💡 *Como usar:* `/buscar <termo>`\nExemplo: `/buscar react` ou `/buscar poco x6` ou `/buscar estágio`", parse_mode=ParseMode.MARKDOWN)
         return
         
-    query_str = " ".join(context.args)
+    raw_query = " ".join(context.args).strip()
+    # Sanitiza o termo de busca (limite de 50 caracteres e remoção de caracteres de controle)
+    query_str = re.sub(r'[\x00-\x1f\x7f]', '', raw_query)[:50].strip()
+    
+    if not query_str:
+        await update.message.reply_text("⚠️ Termo de busca inválido.", parse_mode=ParseMode.MARKDOWN)
+        return
+        
     status_msg = await update.message.reply_text(f"🔍 *Buscando por '{query_str}' em vagas e promoções...*", parse_mode=ParseMode.MARKDOWN)
     
     # 1. Buscar vagas
