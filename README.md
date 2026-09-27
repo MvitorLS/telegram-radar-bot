@@ -1,5 +1,7 @@
 # Telegram Radar Bot
 
+[![Tests](https://github.com/MvitorLS/telegram-radar-bot/actions/workflows/tests.yml/badge.svg)](https://github.com/MvitorLS/telegram-radar-bot/actions/workflows/tests.yml)
+
 Bot de Telegram que eu uso para não precisar abrir cinco sites por dia atrás de vaga de estágio/júnior. Ele varre as fontes periodicamente, dá uma nota de compatibilidade para cada vaga com base no meu perfil e só me avisa do que passou do corte — sem repetir o que já foi enviado. De bônus, acompanha promoções de hardware.
 
 Rodando como [@VaigasBot](https://t.me/VaigasBot).
@@ -11,7 +13,7 @@ flowchart LR
     subgraph Fontes
         A[Issues de backend-br/vagas,<br/>frontendbr/vagas, react-brasil/vagas,<br/>phpdevbr/vagas]
         B[Programathor]
-        C[Remotar RSS]
+        C[API do Remotar]
         D[Gatry]
     end
     A & B & C --> S[jobs_scraper]
@@ -24,8 +26,8 @@ flowchart LR
     SCH[APScheduler] -. intervalo .-> S & T
 ```
 
-- **Coleta** (`scrapers/`): `httpx` assíncrono + BeautifulSoup. Vagas vêm das issues dos repositórios comunitários via API do GitHub, do Programathor (HTML) e do feed RSS do Remotar; promoções vêm do Gatry.
-- **Pontuação** (`matchmaker.py`): nível da vaga (estágio/júnior/trainee) pesa 35%, tecnologias que batem com o perfil em `config.py` pesam o resto. O aviso automático só dispara para nota ≥ 50; nos comandos manuais o corte é mais baixo (35).
+- **Coleta** (`scrapers/`): `httpx` assíncrono + BeautifulSoup. Vagas vêm das issues dos repositórios comunitários via API do GitHub, do Programathor (HTML) e da API JSON pública do Remotar; promoções vêm do Gatry.
+- **Pontuação** (`matchmaker.py`): nível da vaga (estágio/júnior/trainee) pesa 35%, tecnologias do perfil em `config.py` até 45% e localização (Curitiba/PR/remoto) 20%; vagas pleno/sênior perdem 30 pontos. A comparação é por palavra inteira, então "pr" não casa com "programador". O aviso automático só dispara para nota ≥ 50; nos comandos manuais o corte é mais baixo (35).
 - **Deduplicação** (`database.py`): cada item vira um hash de `url + título`; o que já está em `sent_items` não é reenviado.
 - **Agendamento**: `APScheduler` roda vagas a cada `JOBS_CHECK_INTERVAL` e promoções a cada `DEALS_CHECK_INTERVAL` minutos, para cada chat com o radar ligado.
 
@@ -56,6 +58,13 @@ Para testar a coleta e a pontuação sem Telegram:
 python cli_test.py
 ```
 
+Testes (pontuação, deduplicação no SQLite e scrapers com HTTP simulado via `httpx.MockTransport`):
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 Para adaptar a outro perfil, edite `PROFILE` em `config.py` (skills, níveis-alvo, localização).
 
 ## Stack
@@ -65,4 +74,5 @@ Python 3.14 · python-telegram-bot 22 (async) · httpx · BeautifulSoup4 · APSc
 ## Limitações conhecidas
 
 - Scraping de HTML quebra quando o site muda o layout; a API do GitHub sem token tem limite de 60 req/h.
-- A pontuação é por palavra-chave, então "Node" no texto de uma vaga de Java ainda soma pontos.
+- A pontuação é por palavra-chave, então "Node" citado de passagem numa vaga de Java ainda soma pontos.
+- Falhas de uma fonte são só logadas; a coleta segue com as outras.

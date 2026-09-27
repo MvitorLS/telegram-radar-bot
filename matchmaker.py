@@ -29,6 +29,10 @@ def calculate_job_match(title: str, description: str, location: str = "") -> Tup
         else:
             score += 15.0 # vaga geral de tech
             
+    # Vaga de nível acima do buscado: perde os pontos de nível e mais um pouco
+    if not is_target_level and re.search(r'\b(s[êe]nior|sr\.?|pleno|pl|especialista|tech lead|staff)\b', title.lower()):
+        score -= 30.0
+
     # 2. Checagem de Tecnologias do Perfil do Vitor - Peso: 45%
     # Destaques especiais
     priority_techs = {
@@ -75,12 +79,13 @@ def calculate_job_match(title: str, description: str, location: str = "") -> Tup
     # 3. Localização & Modalidade (Curitiba, PR, Remoto, Híbrido) - Peso: 20%
     location_keywords = ["curitiba", "são josé dos pinhais", "paraná", "pr", "remoto", "home office", "híbrido", "hibrido", "teletrabalho", "anywhere"]
     for loc in location_keywords:
-        if loc in full_text:
+        # Limite de palavra: "pr" não pode casar com "programador" ou "experiência"
+        if re.search(r'\b' + re.escape(loc) + r'\b', full_text):
             matched_skills.append(f"📍 {loc.capitalize()}")
             score += 20.0
             break
             
-    final_score = min(round(score, 1), 100.0)
+    final_score = max(min(round(score, 1), 100.0), 0.0)
     
     # Badge de Classificação
     if final_score >= 80.0:

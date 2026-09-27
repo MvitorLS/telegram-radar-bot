@@ -45,7 +45,8 @@ async def fetch_github_community_jobs(keywords: List[str] = ["estagio", "junior"
                         labels = [l.get("name", "") for l in issue.get("labels", [])]
                         
                         # Extrai localização dos labels ou título
-                        location = "Remoto / Brasil"
+                        # Sem label de local não dá para assumir remoto: isso inflaria o score
+                        location = ""
                         for lbl in labels:
                             if any(x in lbl.lower() for x in ["remoto", "híbrido", "curitiba", "paraná", "pr", "presencial"]):
                                 location = lbl
@@ -64,7 +65,7 @@ async def fetch_github_community_jobs(keywords: List[str] = ["estagio", "junior"
                             jobs.append(JobOffer(
                                 title=title,
                                 company=company,
-                                location=location,
+                                location=location or "Não informado",
                                 url=url,
                                 salary="A Combinar / Na Vaga",
                                 source=f"GitHub ({source_name})",
@@ -132,41 +133,39 @@ async def fetch_programathor_jobs() -> List[JobOffer]:
     return jobs
 
 async def fetch_remotar_jobs() -> List[JobOffer]:
-    """Busca vagas remotas de estágio e júnior."""
+    """Busca vagas remotas na API pública do Remotar (o antigo feed RSS foi desativado)."""
     jobs = []
-    # Remotar feed / RSS
-    url = "https://remotar.com.br/feed"
     headers = {"User-Agent": "Mozilla/5.0"}
-    
+
     try:
         async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                root = ET.fromstring(resp.text)
-                for item in root.findall("./channel/item")[:15]:
-                    title = item.find("title").text if item.find("title") is not None else ""
-                    link = item.find("link").text if item.find("link") is not None else ""
-                    desc = item.find("description").text if item.find("description") is not None else ""
-                    
+            for term in ("estágio", "júnior", "desenvolvedor"):
+                resp = await client.get("https://api.remotar.com.br/jobs", params={"search": term})
+                if resp.status_code != 200:
+                    continue
+                for item in resp.json().get("data", []):
+                    title = (item.get("title") or "").strip()
+                    desc = BeautifulSoup(item.get("description") or "", "html.parser").get_text(" ", strip=True)
+                    company = (item.get("company") or {}).get("name") or item.get("companyDisplayName") or "Remotar"
+
                     score, skills, badge = calculate_job_match(title, desc, "Remoto")
-                    
+
                     if score >= 35.0:
                         jobs.append(JobOffer(
                             title=title,
-                            company="Remotar Vagas",
+                            company=company,
                             location="100% Remoto",
-                            url=link,
+                            url=f"https://remotar.com.br/job/{item['id']}",
                             salary="A Combinar",
                             source="Remotar",
-                            description=desc[:250] + "...",
+                            description=desc[:250] + "..." if len(desc) > 250 else desc,
                             match_score=score,
                             matched_skills=skills,
                             badge=badge
                         ))
     except Exception as e:
-        # Fallback silencioso
-        pass
-        
+        print(f"Erro ao buscar vagas do Remotar: {e}")
+
     return jobs
 
 async def get_all_jobs(custom_query: str = "") -> List[JobOffer]:
