@@ -1,59 +1,68 @@
-# 🤖 Telegram Radar Bot — Vagas & Promoções Tech
+# Telegram Radar Bot
 
-Bot inteligente para Telegram desenvolvido sob medida para **Matheus Vitor Lourenço Schionato**, integrando:
-1. 🎯 **Radar de Vagas de TI (Estágio & Júnior)**: Rastreamento automático e matchmaking de afinidade (% de compatibilidade) com o seu currículo (PHP, Python, Node, React, Docker, Linux, Celepar/Lottopar).
-2. ⚡ **Radar de Promoções de Eletrônicos & Hardware**: Monitoramento de ofertas relâmpago de smartphones (POCO, Xiaomi), SSDs, GPUs, periféricos, monitores e hardware gamer.
+Bot de Telegram que eu uso para não precisar abrir cinco sites por dia atrás de vaga de estágio/júnior. Ele varre as fontes periodicamente, dá uma nota de compatibilidade para cada vaga com base no meu perfil e só me avisa do que passou do corte — sem repetir o que já foi enviado. De bônus, acompanha promoções de hardware.
 
----
+Rodando como [@VaigasBot](https://t.me/VaigasBot).
 
-## 🚀 Como Iniciar
+## Como funciona
 
-### 1. Criar o Bot no Telegram
-1. Abra o Telegram e procure por **`@BotFather`**.
-2. Envie o comando `/newbot`.
-3. Escolha o nome do seu bot (ex: `Vitor Radar Bot`) e o username (ex: `vitor_radar_bot`).
-4. O BotFather vai te dar um **Token HTTP API** (ex: `123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ`).
-
-### 2. Configurar o Token
-Copie o arquivo `.env.example` para `.env` e adicione o seu token:
-```bash
-cp .env.example .env
-nano .env  # Cole o token no TELEGRAM_BOT_TOKEN
+```mermaid
+flowchart LR
+    subgraph Fontes
+        A[Issues de backend-br/vagas,<br/>frontendbr/vagas, react-brasil/vagas,<br/>phpdevbr/vagas]
+        B[Programathor]
+        C[Remotar RSS]
+        D[Gatry]
+    end
+    A & B & C --> S[jobs_scraper]
+    D --> T[deals_scraper]
+    S --> M[matchmaker<br/>score 0–100]
+    M --> F{vaga: score ≥ 50<br/>e hash inédito?}
+    T --> F
+    F -- sim --> DB[(SQLite<br/>sent_items)]
+    F -- sim --> TG[Mensagem no Telegram]
+    SCH[APScheduler] -. intervalo .-> S & T
 ```
 
-### 3. Rodar Localmente
+- **Coleta** (`scrapers/`): `httpx` assíncrono + BeautifulSoup. Vagas vêm das issues dos repositórios comunitários via API do GitHub, do Programathor (HTML) e do feed RSS do Remotar; promoções vêm do Gatry.
+- **Pontuação** (`matchmaker.py`): nível da vaga (estágio/júnior/trainee) pesa 35%, tecnologias que batem com o perfil em `config.py` pesam o resto. O aviso automático só dispara para nota ≥ 50; nos comandos manuais o corte é mais baixo (35).
+- **Deduplicação** (`database.py`): cada item vira um hash de `url + título`; o que já está em `sent_items` não é reenviado.
+- **Agendamento**: `APScheduler` roda vagas a cada `JOBS_CHECK_INTERVAL` e promoções a cada `DEALS_CHECK_INTERVAL` minutos, para cada chat com o radar ligado.
+
+## Comandos
+
+| Comando | O que faz |
+| --- | --- |
+| `/start` | Menu com botões |
+| `/vagas` | Busca agora e lista as vagas com maior nota |
+| `/promocoes` | Promoções do dia |
+| `/buscar <termo>` | Filtra vagas e promoções por termo (`/buscar react`, `/buscar curitiba`) |
+| `/perfil` | Mostra o perfil usado na pontuação |
+| `/radar_on` · `/radar_off` | Liga/desliga os avisos automáticos |
+| `/status` | Contadores de itens enviados e intervalos configurados |
+
+## Rodando
+
+Crie um bot no [@BotFather](https://t.me/BotFather) e copie o token.
+
 ```bash
-cd /home/vitor/Projetos/telegram-radar-bot
-source .venv/bin/activate
-python3 bot.py
+cp .env.example .env        # preencha TELEGRAM_BOT_TOKEN
+docker compose up -d        # ou: python -m venv .venv && pip install -r requirements.txt && python bot.py
 ```
 
-### 4. Rodar 24/7 com Docker Compose
+Para testar a coleta e a pontuação sem Telegram:
+
 ```bash
-docker compose up -d
+python cli_test.py
 ```
 
----
+Para adaptar a outro perfil, edite `PROFILE` em `config.py` (skills, níveis-alvo, localização).
 
-## 🎮 Comandos do Bot no Telegram
+## Stack
 
-| Comando | Descrição |
-| :--- | :--- |
-| `/start` | Menu interativo com botões rápidos. |
-| `/vagas` | Busca instantânea das vagas de Estágio e Júnior com maior Match Score. |
-| `/promocoes` | Busca instantânea das melhores promoções de eletrônicos do dia. |
-| `/buscar <termo>` | Busca customizada (ex: `/buscar react`, `/buscar poco x6`, `/buscar curitiba`). |
-| `/perfil` | Exibe o perfil profissional cadastrado (skills, histórico, GitHub e LinkedIn). |
-| `/radar_on` | Ativa notificações automáticas periódicas. |
-| `/radar_off` | Pausa notificações automáticas. |
-| `/status` | Exibe estatísticas de vagas/ofertas enviadas e status do banco SQLite. |
+Python 3.14 · python-telegram-bot 22 (async) · httpx · BeautifulSoup4 · APScheduler · aiosqlite · Docker
 
----
+## Limitações conhecidas
 
-## 🛠️ Tecnologias Utilizadas
-- **Python 3.14+**
-- **python-telegram-bot v22** (Async / Await)
-- **httpx & BeautifulSoup4** (Web Scraping assíncrono de alta performance)
-- **APScheduler** (Agendador de tarefas em background)
-- **aiosqlite** (Banco de dados SQLite assíncrono com prevenção de duplicatas)
-- **Docker & Docker Compose**
+- Scraping de HTML quebra quando o site muda o layout; a API do GitHub sem token tem limite de 60 req/h.
+- A pontuação é por palavra-chave, então "Node" no texto de uma vaga de Java ainda soma pontos.
